@@ -1,79 +1,92 @@
-
 **Status:** Draft
 
-**Version:** 1.0
+**Version:** 2.0
 
 **Primary Actor:** Client
 
-**Supporting Actor:** Specialist, System
+**Supporting Actor:** System
 
 **Goal:**
-Allow a client to leave a review for a completed appointment, ensuring reviews are only created after successful consultation.
+
+Allow a Client to leave feedback for a Specialist after at least one consultation between them has been conclusively resolved as having occurred.
 
 ---
 
 # Preconditions
 
 - Client is authenticated.
-- Appointment exists.
-- Appointment status is **Completed**.
-- Appointment is linked to the client.
-- Review for this appointment does not already exist.
+- Specialist exists.
+- At least one historical Booking exists between the Client and Specialist with a SessionOutcome satisfying:
+
+```text
+resolutionStatus = RESOLVED
+finalOutcome = OCCURRED
+```
+
+- Review for this Client-Specialist pair does not already exist.
 
 ---
 
 # Trigger
 
-Client selects a completed appointment and chooses **Leave Review**.
+Client chooses to leave a Review for a Specialist.
 
 ---
 
 # Main Success Scenario
 
-1. Client opens appointment history.
-2. Client selects a completed appointment.
-3. Client selects **Leave Review** option.
-4. System verifies appointment status is **Completed**.
-5. System checks that no review already exists.
-6. Client enters rating and optional comment.
-7. Client submits review.
-8. System validates input data.
-9. System stores review linked to appointment, client, and specialist.
-10. System marks review as **Published**.
-11. System updates specialist rating (if applicable).
-12. System confirms successful submission.
+1. Client opens the Specialist or Review interface.
+2. Client selects **Leave Review**.
+3. System identifies the authenticated Client and target Specialist.
+4. System checks whether a Review already exists for the Client-Specialist pair.
+5. System checks historical Booking and SessionOutcome data for the same Client and Specialist.
+6. System verifies that at least one SessionOutcome is `RESOLVED / OCCURRED`.
+7. Client enters a rating and optional comment.
+8. Client submits the Review.
+9. System validates the Review data.
+10. System stores one Review linked to the Client and Specialist.
+11. System confirms successful submission.
 
 ---
 
 # Alternative Flows
 
-## A1. Appointment not completed
+## A1. No Eligible SessionOutcome
+
+At Step 6:
+
+1. System finds no `RESOLVED / OCCURRED` SessionOutcome for the Client-Specialist pair.
+2. Review creation is rejected.
+3. System informs the Client that Review creation is not yet allowed.
+
+The following do not satisfy eligibility:
+
+```text
+PENDING
+DISPUTED
+UNVERIFIED
+RESOLVED / DID_NOT_OCCUR
+```
+
+---
+
+## A2. Review Already Exists
 
 At Step 4:
 
-1. System detects appointment is not marked as **Completed**.
-2. Review creation is rejected.
-3. System informs client that review is not allowed yet.
+1. System detects an existing Review for the same Client and Specialist.
+2. Creation of another Review is rejected.
+3. Client may edit the existing Review instead.
 
 ---
 
-## A2. Review already exists
+## A3. Invalid Review Data
 
-At Step 5:
+At Step 9:
 
-1. System detects existing review for appointment.
-2. Operation is rejected.
-3. System prevents duplicate review.
-
----
-
-## A3. Invalid review data
-
-At Step 8:
-
-1. System detects invalid rating or empty required fields.
+1. System detects invalid Review data.
 2. Review is not saved.
-3. System displays validation errors.
+3. System returns validation errors.
 
 ---
 
@@ -81,23 +94,24 @@ At Step 8:
 
 ## Success
 
-- Review is stored in system.
-- Review is linked to appointment and specialist.
-- Specialist rating is updated.
+- Review is stored in the system.
+- Review is linked to the Client and Specialist.
+- No Booking identifier is stored as Review ownership.
+- Specialist rating queries can include the new Review.
 
 ## Failure
 
-- No review is created.
-- System state remains unchanged.
+- No new Review is created.
+- Existing system state remains unchanged.
 
 ---
 
 # Related Functional Requirements
 
-- FR-033
-- FR-034
-- FR-035
-- FR-036
+- FR-047
+- FR-048
+- FR-049
+- FR-050
 
 ---
 
@@ -115,27 +129,54 @@ At Step 8:
 
 # Notes
 
-### Critical Rule
+## Critical Rule
 
-A review can only be created if:
+Review eligibility exists when at least one consultation for the same Client and Specialist has:
 
-- appointment is completed;
-- appointment belongs to the client;
-- no previous review exists for that appointment.
+```text
+SessionOutcome.resolutionStatus = RESOLVED
+SessionOutcome.finalOutcome = OCCURRED
+```
+
+The final OCCURRED outcome may result from:
+
+- two compatible OCCURRED reports;
+- one OCCURRED report finalized after reporting timeout;
+- administrative resolution of a dispute to OCCURRED.
+
+Dual confirmation is not required as a separate Review condition.
 
 ---
 
-### System Behavior
+## Relationship Rule
 
-Reviews are immediately visible after creation unless moderation is added later.
+The Review belongs to:
+
+```text
+Client + Specialist
+```
+
+not to an individual appointment.
+
+At most one Review may exist for the same pair.
+
+The existing Review may be edited later.
 
 ---
 
-### Future Extension
+## Rating
+
+For the MVP, Specialist rating is calculated from Review data when queried.
+
+A persisted `rating_avg` field is not required.
+
+---
+
+## Future Extension
 
 This Use Case may later include:
 
-- admin moderation before publishing
-- edit/delete review rules
-- fraud prevention (fake reviews)
-- weighted rating system
+- additional moderation workflows;
+- fraud-prevention mechanisms;
+- rating caching or projection for performance;
+- more advanced reputation models.
