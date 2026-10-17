@@ -1,127 +1,242 @@
 
-**Status:** Draft
+# UC-004. Вход в систему (Login)
 
-**Version:** 1.0
-
-**Primary Actor:** User (Client / Specialist / Administrator)
-
-**Goal:**
-Allow registered users to authenticate and access the platform according to their role and status.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** USER (CLIENT / SPECIALIST / ADMIN)  
+**Цель:** Аутентифицировать пользователя и предоставить доступ к разрешённой функциональности платформы.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- User account exists.
-- User account is not in **Rejected** state.
-- User account is not blocked (Suspended).
-- User has valid credentials.
+Сценарий описывает аутентификацию зарегистрированного пользователя PsyWeb.
 
----
+Пользователь предоставляет email и пароль.
 
-# Trigger
+Система проверяет учётные данные, актуальное состояние User и при успешной проверке выдаёт JWT access token.
 
-User selects the **Login / Sign In** option.
+Аутентификация определяет личность пользователя.
 
----
-
-# Main Success Scenario
-
-1. User opens the login page.
-2. User enters email and password.
-3. User submits login form.
-4. System validates input data.
-5. System checks credentials against stored user data.
-6. System verifies user account status is **Active**.
-7. System creates authenticated session (or issues JWT token).
-8. System redirects user to the platform dashboard.
-9. System loads role-based interface (Client / Specialist / Administrator).
+Доступ к конкретным бизнес-операциям определяется отдельно через авторизацию.
 
 ---
 
-# Alternative Flows
+# 2. Предусловия
 
-## A1. Invalid credentials
+- В системе существует учётная запись пользователя.
+- Пользователь располагает учётными данными.
+- Для успешного завершения User должен иметь статус `ACTIVE`.
 
-At Step 5:
-
-1. System cannot match email/password.
-2. Authentication is rejected.
-3. System shows error message: invalid credentials.
-4. User may retry login.
+Модерационный статус Specialist не является предусловием Login.
 
 ---
 
-## A2. Account not active
+# 3. Инициирующее событие
 
-At Step 6:
-
-1. System detects account is not **Active**.
-2. Authentication is denied.
-3. System informs user that account is pending approval or blocked.
+Пользователь выбирает действие входа в систему.
 
 ---
 
-## A3. Account rejected
+# 4. Основной успешный сценарий
 
-At Step 6:
-
-1. System detects account status = **Rejected**.
-2. Authentication is denied.
-3. System informs user that account was rejected.
-
----
-
-## A4. Account suspended
-
-At Step 6:
-
-1. System detects account status = **Suspended**.
-2. Authentication is denied.
-3. System informs user that account is temporarily blocked.
+1. Пользователь открывает форму входа.
+2. Система отображает поля email и password.
+3. Пользователь вводит учётные данные.
+4. Пользователь отправляет форму.
+5. Система проверяет корректность входных данных.
+6. Система нормализует email согласно политике User Domain.
+7. Система находит соответствующую учётную запись.
+8. Система проверяет пароль по сохранённому passwordHash.
+9. Система проверяет актуальный UserStatus.
+10. При `UserStatus.ACTIVE` система формирует подписанный JWT access token.
+11. Система возвращает результат успешной аутентификации.
+12. Клиентское приложение предоставляет пользователю доступ к интерфейсу, соответствующему его роли и разрешённым функциям.
 
 ---
 
-# Postconditions
+# 5. Альтернативные сценарии
 
-## Success
+## 5.1. Некорректные учётные данные
 
-- User is authenticated.
-- Session or token is created.
-- User gains access based on role.
+**Возникает на шагах 7–8.**
 
-## Failure
+1. Учётная запись не найдена либо пароль не соответствует сохранённому hash.
+2. Аутентификация отклоняется.
+3. JWT не выдаётся.
+4. Пользователь получает предусмотренное сообщение об ошибке.
+5. Пользователь может повторить попытку.
 
-- No session is created.
-- User remains unauthenticated.
+## 5.2. BLOCKED User
+
+**Возникает на шаге 9.**
+
+1. Система обнаруживает `UserStatus.BLOCKED`.
+2. Аутентификация отклоняется.
+3. JWT не выдаётся.
+4. Пользователь получает предусмотренное сообщение об отказе.
+
+## 5.3. Некорректный формат данных
+
+**Возникает на шаге 5 или 6.**
+
+1. Система обнаруживает нарушение формата или отсутствие обязательных данных.
+2. Обработка прекращается.
+3. Пользователь получает сообщение об ошибке.
+4. JWT не выдаётся.
+
+## 5.4. Ошибка аутентификационной инфраструктуры
+
+1. Система не может завершить проверку учётных данных или выпуск токена.
+2. Аутентификация не считается успешной.
+3. Пользователь получает предусмотренную ошибку без раскрытия чувствительной информации.
 
 ---
 
-# Related Functional Requirements
+# 6. Постусловия
 
-- FR-005
-- FR-006
-- FR-007
-- FR-008
-- FR-009
+## 6.1. Успешное завершение
 
----
+- Пользователь успешно аутентифицирован.
+- UserStatus на момент проверки равен `ACTIVE`.
+- Сформирован действительный JWT access token.
+- Клиентское приложение может использовать JWT для дальнейших защищённых запросов.
+- Права на бизнес-операции проверяются отдельно.
 
-# Related User Stories
+## 6.2. Неуспешное завершение
 
-- US-001
-- US-011
-
----
-
-# Related Product Backlog Items
-
-- PB-001 Authentication & Authorization
+- JWT не выдан.
+- Пользователь не получает новый аутентифицированный доступ.
+- Учётная запись не изменяется.
 
 ---
 
-# Notes
+# 7. Бизнес-правила
 
-Authentication mechanism (JWT, session-based auth, etc.) is not defined at this level and will be specified in architecture documentation.
+## 7.1. Состояние аккаунта
 
-Login is role-agnostic: system determines access rights after authentication.
+Успешный Login требует:
+
+```text
+Valid credentials
+AND UserStatus.ACTIVE
+```
+
+## 7.2. Роли
+
+Допускаются:
+
+- CLIENT;
+- SPECIALIST;
+- ADMIN.
+
+Все три роли используют общий механизм аутентификации.
+
+## 7.3. Модерация специалиста
+
+Специалист с ACTIVE User может аутентифицироваться при состояниях:
+
+```text
+PENDING
+APPROVED
+REJECTED
+SUSPENDED
+```
+
+Эти значения относятся к профессиональной модерации, а не к UserStatus.
+
+## 7.4. Профессиональные полномочия
+
+Успешный Login специалиста не означает автоматического профессионального допуска.
+
+## 7.5. BookingAccess
+
+Значение `SpecialistBookingAccess.bookingAllowed` не влияет непосредственно на успешность Login.
+
+Оно проверяется в соответствующих бизнес-операциях.
+
+## 7.6. Нормализация email
+
+Используется единая политика:
+
+```text
+trim
+→ lowercase(Locale.ROOT)
+→ validate
+```
+
+## 7.7. Безопасность пароля
+
+Пароль проверяется с помощью предусмотренного PasswordEncoder.
+
+Открытый пароль не сохраняется и не возвращается клиенту.
+
+## 7.8. JWT
+
+В целевой архитектуре используется подписанный JWT с ограниченным сроком действия.
+
+Основные claims:
+
+- userId;
+- role;
+- expiration.
+
+## 7.9. Актуальное состояние
+
+Защищённые запросы должны проверять актуальный UserStatus.
+
+Ранее выданный JWT не должен позволять BLOCKED User продолжать выполнять защищённые операции.
+
+## 7.10. Независимость авторизации
+
+Authentication не заменяет:
+
+- role-based access;
+- resource ownership;
+- specialist eligibility;
+- booking eligibility;
+- domain-state validation.
+
+---
+
+# 8. Связанные сценарии
+
+- `UC-001 Register Client`;
+- `UC-002 Register Specialist`;
+- `UC-003 Review Specialist Application`.
+
+---
+
+# 9. Примечания
+
+- Login не создаёт Booking или Reservation.
+- Состояние Specialist не меняется при аутентификации.
+- Целевая модель использует stateless JWT.
+- Обычный Logout предполагает удаление токена на клиентском устройстве.
+- Refresh token не является обязательным элементом MVP.
+- Точный endpoint и формат AuthenticationResponse определяются API-документацией.
+- Неудачная попытка Login не должна раскрывать существование учётной записи или чувствительные данные без необходимости.
+
+---
+
+# 10. Итог
+
+Успешная аутентификация требует корректных учётных данных и ACTIVE User.
+
+```text
+Credentials
+    ↓
+User Lookup
+    ↓
+Password Verification
+    ↓
+UserStatus.ACTIVE
+    ↓
+JWT
+    ↓
+Authenticated Requests
+```
+
+Дальнейшие права определяются отдельно через Authorization Model.
+
+**Статус: DRAFT — сценарий согласован с целевой JWT Authentication.**
