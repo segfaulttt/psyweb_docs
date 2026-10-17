@@ -1,177 +1,295 @@
 
-**Status:** Draft
+# UC-007. Запись на консультацию (Book Appointment)
 
-**Version:** 1.0
-
-**Primary Actor:** Client
-
-**Supporting Actor:** Specialist
-
-**Goal:**
-Allow a client to book an available consultation slot with a specialist.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** CLIENT  
+**Дополнительный участник:** SPECIALIST  
+**Цель:** Создать временную Reservation и подтвердить запись на консультацию.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- Client is authenticated.
-- Client account status is **Active**.
-- Specialist account status is **Active**.
-- Specialist has at least one active service.
-- Specialist has available slots.
-- Selected slot is not already booked.
+Сценарий описывает запись клиента на консультацию к специалисту.
 
----
+В целевой модели PsyWeb запись состоит из двух последовательных этапов:
 
-# Trigger
+1. Создание временной Reservation.
+2. Подтверждение Reservation и создание Booking.
 
-Client selects a service and chooses an available time slot.
+Клиент сначала выбирает конкретную ServiceOffering, затем доступное время.
 
----
+Платформа рассчитывает доступные начала динамически.
 
-# Main Success Scenario
+Просмотр Availability не удерживает время.
 
-1. Client opens specialist profile.
-2. Client selects a consultation service.
-3. System displays available slots for selected service.
-4. Client selects an available slot.
-5. System validates slot availability.
-6. System verifies no time conflict with client's existing appointments.
-7. System verifies specialist is still available at that time.
-8. System creates a new appointment.
-9. System marks selected slot as **Booked**.
-10. System links appointment to client and specialist.
-11. System confirms successful booking.
-12. System sends notifications to both client and specialist.
+Только успешное создание ACTIVE Reservation формирует ScheduleOccupancy.
 
 ---
 
-# Alternative Flows
+# 2. Предусловия
 
-## A1. Slot already booked
+- Клиент аутентифицирован.
+- `UserRole.CLIENT`.
+- `UserStatus.ACTIVE`.
+- Выбранный специалист существует.
+- Выбранная ServiceOffering существует и активна.
+- Специалист имеет необходимый эффективный допуск к бронированию.
+- Клиент выбирает время в пределах предусмотренного горизонта записи.
 
-At Step 5:
-
-1. System detects that slot is no longer available.
-2. Booking is rejected.
-3. System informs client to choose another slot.
-
----
-
-## A2. Client has conflicting appointment
-
-At Step 6:
-
-1. System detects overlapping appointment for client.
-2. Booking is rejected.
-3. System informs client about time conflict.
+Доступность, показанная клиенту ранее, не гарантирует успешного создания Reservation.
 
 ---
 
-## A3. Specialist became unavailable
+# 3. Инициирующее событие
 
-At Step 7:
-
-1. System detects that specialist has removed or modified availability.
-2. Booking is rejected.
-3. System prompts client to refresh available slots.
+Клиент выбирает услугу специалиста и запрашивает доступное время консультации.
 
 ---
 
-## A4. Slot removed during booking process
+# 4. Основной успешный сценарий
 
-At Step 5 or 7:
+## 4.1. Выбор консультации
 
-1. System detects that slot was deleted by specialist.
-2. Booking is cancelled.
-3. System informs client.
+1. Клиент открывает публичный профиль специалиста.
+2. Система отображает доступные ServiceOffering.
+3. Клиент выбирает услугу.
+4. Клиент выбирает интересующий диапазон дат.
+5. Система рассчитывает доступные начала консультаций.
+6. Клиент выбирает подходящее начало.
 
----
+## 4.2. Создание Reservation
 
-# Postconditions
+7. Клиент отправляет запрос на временное резервирование.
+8. Система проверяет принадлежность запроса клиенту и его полномочия.
+9. Система повторно проверяет актуальность ServiceOffering.
+10. Система проверяет эффективный допуск специалиста.
+11. Система проверяет расписание и временные ограничения.
+12. Система проверяет отсутствие конфликтующей ScheduleOccupancy.
+13. Система атомарно создаёт:
+    - ACTIVE Reservation;
+    - соответствующую ScheduleOccupancy.
+14. Reservation получает системный expiresAt.
+15. Система возвращает клиенту данные временной Reservation и время окончания удержания.
 
-## Success
+## 4.3. Подтверждение
 
-- Appointment is created in system.
-- Slot is marked as booked.
-- Client and specialist are linked to appointment.
-- Notifications are sent.
-
-## Failure
-
-- No appointment is created.
-- Slot remains unchanged (or already removed).
-- System state remains consistent.
-
----
-
-# Related Functional Requirements
-
-- FR-027
-- FR-028
-- FR-029
-- FR-030
-- FR-031
-- FR-034
-- FR-046
-
----
-
-# Related User Stories
-
-- US-006
-- US-007
-- US-008
+16. Клиент выбирает подтверждение Reservation.
+17. Система проверяет, что Reservation принадлежит этому клиенту.
+18. Система проверяет, что Reservation остаётся ACTIVE и её TTL не истёк.
+19. Система проверяет необходимый эффективный допуск специалиста.
+20. Система переводит Reservation в CONFIRMED.
+21. Система создаёт CONFIRMED Booking.
+22. Существующая ScheduleOccupancy сохраняется.
+23. Связанные изменения фиксируются атомарно.
+24. Клиент получает подтверждение записи.
+25. Система инициирует предусмотренные уведомления участников после успешного сохранения Booking.
 
 ---
 
-# Related Product Backlog Items
+# 5. Альтернативные сценарии
 
-- PB-008 Appointment Booking
-- PB-009 Appointment Management
+## 5.1. Время стало занятым
+
+**Возникает при создании Reservation.**
+
+1. Система обнаруживает конфликтующую ScheduleOccupancy.
+2. Новая Reservation не создаётся.
+3. Клиент получает сообщение, что выбранное время недоступно.
+4. Клиент может повторно запросить Availability.
+
+## 5.2. Расписание изменилось
+
+1. После предварительного просмотра специалист изменил расписание.
+2. При создании Reservation система проверяет актуальную конфигурацию.
+3. Если выбранное время больше не подходит, операция отклоняется.
+4. Клиент может выбрать другое начало.
+
+## 5.3. Услуга деактивирована
+
+1. Выбранная ServiceOffering больше не активна.
+2. Создание новой Reservation отклоняется.
+3. Клиент получает сообщение о недоступности услуги.
+
+## 5.4. Специалист потерял допуск
+
+1. До создания или подтверждения Reservation специалист потерял необходимый допуск.
+2. Операция отклоняется согласно текущему состоянию.
+3. Клиент получает предусмотренное сообщение об ошибке.
+
+## 5.5. Нарушен bookingDeadline
+
+1. Выбранное начало больше не соответствует minimumBookingNotice.
+2. Новая Reservation не создаётся.
+3. Клиенту предлагается выбрать другое время.
+
+## 5.6. Истёк TTL
+
+**Возникает при подтверждении.**
+
+1. Система определяет, что Reservation больше не может быть подтверждена по времени.
+2. Booking не создаётся.
+3. Reservation подлежит переходу в EXPIRED согласно согласованной обработке истечения.
+4. Связанная Occupancy освобождается.
+5. Клиент получает сообщение об истечении удержания.
+
+## 5.7. Reservation уже завершена
+
+1. Reservation имеет CONFIRMED, CANCELLED или EXPIRED.
+2. Повторное подтверждение отклоняется.
+3. Дополнительная Booking не создаётся.
+
+## 5.8. Конкурентное бронирование
+
+1. Несколько клиентов одновременно пытаются занять пересекающиеся интервалы одного специалиста.
+2. Система применяет транзакционную защиту.
+3. Не более одного конфликтующего удержания успешно сохраняется.
+4. Остальные операции отклоняются без частичного состояния.
+
+## 5.9. Неоднозначное или несуществующее локальное начало
+
+1. Выбранное начало попадает в недопустимый случай перехода часового пояса.
+2. Создание Reservation отклоняется.
+3. Клиенту предлагается выбрать другое время.
+
+## 5.10. Клиент имеет другую пересекающуюся консультацию
+
+**Требует отдельного архитектурного решения.**
+
+Исходные требования запрещают пересекающиеся консультации одного клиента у разных специалистов.
+
+Точный механизм проверки, набор учитываемых состояний и конкурентная защита ещё не утверждены.
+
+Этот сценарий нельзя считать полностью обеспеченным одним ограничением ScheduleOccupancy.
 
 ---
 
-# Notes
+# 6. Постусловия
 
-### Critical Rule — No Double Booking
+## 6.1. После успешного создания Reservation
 
-The system must guarantee that:
+- Создана ACTIVE Reservation.
+- Создана ScheduleOccupancy.
+- Установлен expiresAt.
+- Сохранены согласованные условия ServiceOffering и необходимые правила отмены.
+- Booking ещё не существует.
 
-- a slot cannot be booked twice;
-- a client cannot have overlapping appointments;
-- a specialist cannot be double-booked.
+## 6.2. После успешного подтверждения
+
+- Reservation имеет статус CONFIRMED.
+- Создана одна CONFIRMED Booking.
+- ScheduleOccupancy продолжает удерживать время.
+- Клиент получает сведения о подтверждённой консультации.
+
+## 6.3. Неуспешное создание Reservation
+
+- Новая Reservation не создана.
+- Новая Occupancy не создана.
+- Существующие данные остаются согласованными.
+
+## 6.4. Неуспешное подтверждение
+
+- Новая Booking не создана.
+- Не возникает частично подтверждённого состояния.
+- Существующая Reservation обрабатывается согласно причине отказа.
 
 ---
 
-### Concurrency Requirement
+# 7. Бизнес-правила
 
-Booking must be **atomic operation**.
+## 7.1. Выбор услуги
 
-If two clients attempt to book the same slot simultaneously, only one request must succeed.
+Для записи необходимо выбрать конкретную активную ServiceOffering.
 
-This will later require:
+## 7.2. Динамическая доступность
 
-- transaction management
-- locking strategy (optimistic or pessimistic locking)
-- database constraints
+Варианты времени рассчитываются, а не выбираются из сохранённых AvailabilitySlot.
+
+## 7.3. Сетка времени
+
+Начало консультации должно соответствовать локальной сетке с шагом 15 минут.
+
+## 7.4. Рабочее расписание
+
+Вся консультация должна помещаться в один непрерывный рабочий интервал.
+
+## 7.5. Перерыв
+
+Длительность перерыва после консультации учитывается в ScheduleOccupancy.
+
+## 7.6. Уникальность занятости
+
+Действующие интервалы одного специалиста не должны пересекаться.
+
+## 7.7. MinimumBookingNotice
+
+Новую Reservation разрешено создавать только до bookingDeadline.
+
+## 7.8. TTL
+
+Reservation TTL устанавливается платформой.
+
+## 7.9. Исторические условия
+
+Условия услуги и отмены сохраняются на момент создания Reservation.
+
+## 7.10. Подтверждение после изменения расписания
+
+Обычное изменение расписания или условий услуги не требует повторного согласования уже сохранённых условий действующей Reservation.
+
+## 7.11. Эффективный допуск
+
+Создание и подтверждение Reservation требуют действующего допуска специалиста.
+
+## 7.12. Единственность Booking
+
+Одна Reservation не может создать несколько Booking.
+
+## 7.13. Атомарность
+
+Создание Reservation и Occupancy, а также подтверждение Reservation и создание Booking выполняются атомарно.
 
 ---
 
-### Domain Dependency Chain
+# 8. Связанные сценарии
 
-Booking depends on:
+- `UC-005 Create Service`;
+- `UC-006 Manage Availability (Slots)` — управление расписанием;
+- `UC-008 Cancel Appointment`;
+- `UC-009 Leave Review` — после подтверждённого результата консультации.
 
+---
+
+# 9. Примечания
+
+- Просмотр Availability не является гарантией записи.
+- Reservation и Booking — разные бизнес-сущности.
+- Показанное время может стать недоступным до создания Reservation.
+- Подтверждение должно учитывать фактическое время после получения необходимых блокировок.
+- Отправка Notification не является обязательной частью атомарного создания Booking.
+- Перенос консультации является отдельной потенциальной функциональностью и не входит в этот сценарий.
+
+---
+
+# 10. Итог
+
+Успешная запись проходит последовательность:
+
+```text id="ljar2d"
+ServiceOffering
+    ↓
+Dynamic Availability
+    ↓
+ACTIVE Reservation
+    +
+ScheduleOccupancy
+    ↓
+CONFIRMED Reservation
+    +
+CONFIRMED Booking
+    ↓
+Уведомления участников
 ```
-Specialist → Service → Availability Slot → Appointment
-```
 
----
-
-### Future Extension
-
-This use case will later support:
-
-- cancellation policies
-- refunds (if payments are added)
-- rescheduling logic
+**Статус: DRAFT — сценарий согласован с Reservation, Booking и ScheduleOccupancy.**
