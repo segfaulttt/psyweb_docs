@@ -1,106 +1,218 @@
 
-**Status:** Draft
+# UC-003. Рассмотрение заявки специалиста (Review Specialist Application)
 
-**Version:** 1.0
-
-**Primary Actor:** Administrator
-
-**Supporting Actor:** Specialist
-
-**Goal:**
-Review a specialist registration application and decide whether to approve or reject it.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** ADMIN  
+**Дополнительный участник:** SPECIALIST  
+**Цель:** Рассмотреть заявку специалиста и принять решение об одобрении или отклонении.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- The administrator is authenticated.
-- The administrator has the required permissions.
-- A specialist application exists with the **Pending Approval** status.
+Сценарий описывает административную модерацию заявки специалиста, зарегистрированного на платформе PsyWeb.
 
----
+После регистрации специалист имеет:
 
-# Trigger
+- `UserRole.SPECIALIST`;
+- `UserStatus.ACTIVE`;
+- `Specialist.approvalStatus = PENDING`.
 
-The administrator opens the list of pending specialist applications.
+Администратор рассматривает предоставленные сведения и принимает решение об одобрении либо отклонении.
 
----
-
-# Main Success Scenario
-
-1. The administrator opens the list of pending specialist applications.
-2. The system displays all applications awaiting review.
-3. The administrator selects an application.
-4. The system displays the application details.
-5. The administrator reviews the submitted information.
-6. The administrator approves the application.
-7. The system changes the specialist account status from **Pending Approval** to **Active**.
-8. The system grants access to specialist functionality.
-9. The system notifies the specialist that the application has been approved.
+Результат рассмотрения изменяет профессиональный статус Specialist, но не заменяет состояние связанного User.
 
 ---
 
-# Alternative Flows
+# 2. Предусловия
 
-## A1. Application is rejected
-
-At Step 6:
-
-1. The administrator rejects the application.
-2. The system changes the account status to **Rejected**.
-3. The system notifies the specialist that the application has been rejected.
+- Администратор аутентифицирован.
+- Администратор имеет роль `ADMIN`.
+- Его UserStatus равен `ACTIVE`.
+- Заявка специалиста существует.
+- `Specialist.approvalStatus = PENDING`.
 
 ---
 
-## A2. Application is no longer available
+# 3. Инициирующее событие
 
-At Step 3:
-
-1. The selected application has already been processed.
-2. The system informs the administrator.
-3. The review process is cancelled.
+Администратор открывает список заявок специалистов, ожидающих рассмотрения.
 
 ---
 
-# Postconditions
+# 4. Основной успешный сценарий
 
-## Success
-
-- The specialist account status is **Active**.
-- The specialist can access all specialist-specific functionality.
-
-## Failure
-
-- The specialist account status is **Rejected**.
-- The specialist cannot access specialist functionality.
-
----
-
-# Related Functional Requirements
-
-- FR-003
-- FR-055
-- FR-056
-- FR-057
+1. Администратор открывает список заявок на профессиональное одобрение.
+2. Система отображает заявки специалистов со статусом `PENDING`.
+3. Администратор выбирает заявку.
+4. Система отображает доступные сведения о специалисте.
+5. Администратор изучает предоставленную информацию.
+6. Администратор принимает решение одобрить заявку.
+7. Система проверяет, что заявка всё ещё находится в состоянии `PENDING`.
+8. Система переводит Specialist из `PENDING` в `APPROVED`.
+9. Система сохраняет результат модерации.
+10. Специалист получает профессиональный допуск при соблюдении остальных условий авторизации.
+11. Система инициирует предусмотренное уведомление специалиста.
+12. Администратор получает подтверждение успешного рассмотрения заявки.
 
 ---
 
-# Related User Stories
+# 5. Альтернативные сценарии
 
-- US-019
-- US-020
+## 5.1. Отклонение заявки
+
+**Возникает на шаге 6.**
+
+1. Администратор выбирает отклонение.
+2. При необходимости указывает предусмотренную причину.
+3. Система проверяет актуальное состояние заявки.
+4. Specialist переходит из `PENDING` в `REJECTED`.
+5. Система сохраняет результат модерации.
+6. Специалист не получает профессиональный допуск.
+7. Система инициирует предусмотренное уведомление об отклонении.
+8. Администратор получает подтверждение выполнения операции.
+
+## 5.2. Заявка уже рассмотрена
+
+**Возникает на шаге 7.**
+
+1. Система обнаруживает, что Specialist больше не находится в состоянии `PENDING`.
+2. Повторное решение не применяется.
+3. Администратор получает сообщение о конфликте состояния.
+4. При необходимости интерфейс отображает актуальный статус заявки.
+
+## 5.3. Недостаточные полномочия
+
+1. Пользователь не имеет необходимых административных прав.
+2. Операция отклоняется.
+3. Состояние заявки не меняется.
+
+## 5.4. Ошибка сохранения
+
+1. Система не может зафиксировать модерационное решение.
+2. Операция считается неуспешной.
+3. Частичное изменение состояния не сохраняется.
+4. Администратор получает сообщение об ошибке.
+
+## 5.5. Ошибка уведомления
+
+1. Модерационное решение уже успешно сохранено.
+2. Отправка уведомления завершается ошибкой.
+3. Состояние Specialist не откатывается.
+4. Ошибка обрабатывается согласно политике Notification.
 
 ---
 
-# Related Product Backlog Items
+# 6. Постусловия
 
-- PB-003 Specialist Registration
-- PB-012 Administration Panel
+## 6.1. Одобрение
+
+- Specialist имеет статус `APPROVED`.
+- UserStatus не изменяется самим фактом одобрения.
+- Результат модерации сохранён.
+- Профессиональные полномочия доступны при соблюдении остальных условий.
+- Отдельное ограничение BookingAccess сохраняет своё значение.
+
+## 6.2. Отклонение
+
+- Specialist имеет статус `REJECTED`.
+- UserStatus не изменяется самим фактом отклонения.
+- Специалист не получает профессиональные полномочия.
+- Аккаунт может оставаться доступным для Login.
+- Специалист может воспользоваться предусмотренным сценарием повторной подачи заявки.
+
+## 6.3. Неуспешная операция
+
+- Модерационный статус остаётся прежним.
+- Частичные изменения не фиксируются.
 
 ---
 
-# Notes
+# 7. Бизнес-правила
 
-Only applications with the **Pending Approval** status may be reviewed.
+## 7.1. Роль администратора
 
-Each application can be processed only once.
+Рассматривать заявки может только пользователь с необходимыми полномочиями ADMIN.
+
+## 7.2. Состояние заявки
+
+Обычное первоначальное рассмотрение допускается только для Specialist со статусом `PENDING`.
+
+## 7.3. Допустимые переходы
+
+```text
+PENDING → APPROVED
+PENDING → REJECTED
+```
+
+## 7.4. Независимость UserStatus
+
+Одобрение и отклонение заявки не означают автоматического изменения UserStatus.
+
+## 7.5. Повторная подача
+
+Для отклонённого специалиста предусмотрен отдельный переход:
+
+```text
+REJECTED → PENDING
+```
+
+Повторная подача не выполняется в рамках первоначального административного рассмотрения.
+
+## 7.6. Эффективный допуск
+
+После одобрения новые бронирования допускаются только при выполнении всех условий:
+
+```text
+UserRole.SPECIALIST
+AND UserStatus.ACTIVE
+AND Specialist.approvalStatus = APPROVED
+AND SpecialistBookingAccess.bookingAllowed = TRUE
+```
+
+## 7.7. Независимость BookingAccess
+
+Одобрение заявки не должно автоматически снимать ранее установленное отдельное административное ограничение `bookingAllowed = FALSE`.
+
+## 7.8. История модерации
+
+Значимые модерационные решения должны сохраняться в предусмотренной модели административного аудита.
+
+Реализация полной неизменяемой истории модерации относится к целевой архитектуре.
+
+---
+
+# 8. Связанные сценарии
+
+- `UC-002 Register Specialist` — регистрация специалиста;
+- `UC-004 Login` — аутентификация пользователя.
+
+Административная приостановка уже одобренного специалиста является отдельным бизнес-сценарием и не смешивается с первоначальным рассмотрением заявки.
+
+---
+
+# 9. Примечания
+
+- Сценарий не включает регистрацию User.
+- Модерация не является частью Authentication.
+- Статусы User и Specialist независимы.
+- Приостановка `APPROVED → SUSPENDED` не рассматривается как отклонение новой заявки.
+- Уведомления не должны нарушать согласованность результата модерации.
+- Конкретный набор проверяемых квалификационных документов определяется отдельно.
+
+---
+
+# 10. Итог
+
+После выполнения UC-003 заявка специалиста получает одно из решений:
+
+```text
+PENDING
+   ├── APPROVED
+   └── REJECTED
+```
+
+Учётная запись User сохраняет собственное независимое состояние.
+
+**Статус: DRAFT — сценарий согласован с моделью Specialist и Admin.**
