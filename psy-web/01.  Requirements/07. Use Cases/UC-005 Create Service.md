@@ -1,115 +1,283 @@
 
-**Status:** Draft
+# UC-005. Создание услуги (Create Service)
 
-**Version:** 1.0
-
-**Primary Actor:** Specialist
-
-**Goal:**
-Allow a specialist to create a consultation service that clients can book.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** SPECIALIST  
+**Цель:** Создать консультационную услугу и, при наличии профессионального допуска, сделать её активной.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- Specialist is authenticated.
-- Specialist account status is **Active**.
-- Specialist profile is published (or allowed to have services created even if hidden — TBD, currently allowed).
+Сценарий описывает создание ServiceOffering специалистом PsyWeb.
 
----
+Специалист может подготовить услуги до получения административного одобрения.
 
-# Trigger
+Пока Specialist имеет статус PENDING, новые услуги остаются неактивными.
 
-Specialist selects **Create Service** action in dashboard.
+После одобрения специалист может активировать подготовленные услуги.
 
----
-
-# Main Success Scenario
-
-1. Specialist opens service creation form.
-2. Specialist enters service details.
-3. Specialist submits the form.
-4. System validates input data.
-5. System verifies specialist permissions.
-6. System creates a new service linked to the specialist.
-7. System saves service with **Active** status.
-8. System confirms successful creation.
-9. Service becomes visible in specialist profile.
+Активация услуги и разрешение принимать новые бронирования являются разными условиями.
 
 ---
 
-# Alternative Flows
+# 2. Предусловия
 
-## A1. Invalid input data
+- Пользователь аутентифицирован.
+- `UserRole.SPECIALIST`.
+- `UserStatus.ACTIVE`.
+- Существует связанная модель Specialist.
+- Пользователь управляет собственной ServiceOffering.
 
-At Step 4:
-
-1. System detects missing or invalid fields.
-2. Service is not created.
-3. System displays validation errors.
-4. Specialist corrects input and retries.
-
----
-
-## A2. Specialist is not active
-
-At Step 5:
-
-1. System detects that specialist status is not **Active**.
-2. Service creation is denied.
-3. System informs specialist that account is not active.
+Профессиональное одобрение не является обязательным предусловием создания неактивной услуги.
 
 ---
 
-## A3. Specialist tries to create service without permissions
+# 3. Инициирующее событие
 
-At Step 5:
-
-1. System detects insufficient permissions.
-2. Operation is rejected.
-3. System returns authorization error.
+Специалист выбирает создание новой консультационной услуги.
 
 ---
 
-# Postconditions
+# 4. Основной успешный сценарий
 
-## Success
+## 4.1. Создание неактивной услуги
 
-- New service exists in system.
-- Service is linked to specialist.
-- Service is available for viewing and booking.
+1. Специалист открывает форму создания ServiceOffering.
+2. Система отображает предусмотренные поля.
+3. Специалист указывает название и описание.
+4. Указывает `durationMinutes`.
+5. Указывает `breakDurationMinutes`.
+6. Указывает `price`.
+7. Указывает `currency`.
+8. Заполняет остальные предусмотренные характеристики.
+9. Отправляет данные.
+10. Система проверяет полномочия и принадлежность Specialist.
+11. Система проверяет корректность данных.
+12. Система создаёт ServiceOffering с `isActive = false`.
+13. Система сохраняет услугу.
+14. Специалист получает подтверждение создания.
 
-## Failure
+Этот сценарий доступен как PENDING, так и APPROVED специалисту при соблюдении остальных требований.
 
-- No service is created.
-- System state remains unchanged.
+## 4.2. Активация услуги
 
----
-
-# Related Functional Requirements
-
-- FR-015
-- FR-016
-- FR-017
-- FR-018
-- FR-030
-
----
-
-# Related User Stories
-
-- US-013
-
----
-
-# Related Product Backlog Items
-
-- PB-005 Consultation Services
+1. Специалист выбирает собственную неактивную ServiceOffering.
+2. Запрашивает активацию.
+3. Система проверяет его полномочия.
+4. Система проверяет `UserStatus.ACTIVE`.
+5. Система проверяет `Specialist.approvalStatus = APPROVED`.
+6. Система проверяет допустимость текущих данных услуги.
+7. Система устанавливает `isActive = true`.
+8. Система сохраняет изменение.
+9. Специалист получает подтверждение.
 
 ---
 
-# Notes
+# 5. Редактирование услуги
 
-A service represents a type of consultation offered by a specialist.
+1. Специалист выбирает принадлежащую ему ServiceOffering.
+2. Изменяет разрешённые характеристики.
+3. Система проверяет полномочия и данные.
+4. Система сохраняет изменения.
+5. Специалист получает подтверждение.
 
-A service is required before availability slots can be created.
+PENDING специалист может редактировать собственные неактивные услуги.
+
+Для активной услуги применяются дополнительные ограничения, связанные с профессиональным допуском и правилами изменения ServiceOffering.
+
+Исторические условия ранее созданных Reservation не изменяются.
+
+---
+
+# 6. Альтернативные сценарии
+
+## 6.1. Некорректная длительность
+
+1. `durationMinutes <= 0`.
+2. Система отклоняет сохранение.
+3. Услуга не создаётся или не изменяется.
+
+## 6.2. Некорректный перерыв
+
+1. `breakDurationMinutes < 0`.
+2. Система отклоняет сохранение.
+3. Прежние данные сохраняются.
+
+## 6.3. Стоимость не указана
+
+1. Поле price отсутствует.
+2. Система отклоняет сохранение.
+3. Специалист должен указать стоимость, включая 0 для бесплатной консультации.
+
+## 6.4. Отрицательная стоимость
+
+1. `price < 0`.
+2. Система отклоняет сохранение.
+3. Специалист получает ошибку валидации.
+
+## 6.5. Валюта не указана или некорректна
+
+1. Currency отсутствует либо не соответствует предусмотренному формату.
+2. Система отклоняет сохранение.
+3. Специалист получает ошибку валидации.
+
+## 6.6. Попытка активации до одобрения
+
+1. Специалист имеет статус PENDING или другой статус, отличный от APPROVED.
+2. Система запрещает активацию.
+3. ServiceOffering остаётся неактивной.
+4. Пользователь получает предусмотренное сообщение.
+
+## 6.7. Заблокированная учётная запись
+
+1. `UserStatus.BLOCKED`.
+2. Защищённая операция запрещается.
+3. Услуга не изменяется.
+
+## 6.8. Чужая услуга
+
+1. Пользователь пытается создать или изменить услугу от имени другого Specialist без предусмотренных полномочий.
+2. Операция отклоняется.
+3. Чужие данные не изменяются.
+
+## 6.9. Ошибка сохранения
+
+1. Система не может сохранить изменения.
+2. Операция не считается успешной.
+3. Частичные изменения не фиксируются.
+
+---
+
+# 7. Постусловия
+
+## 7.1. Создание
+
+- Существует новая ServiceOffering.
+- Услуга принадлежит соответствующему Specialist.
+- Все обязательные поля заполнены.
+- `isActive = false`.
+- Создание не влияет на ScheduleOccupancy.
+
+## 7.2. Активация
+
+- ServiceOffering имеет `isActive = true`.
+- В момент активации Specialist имел необходимый профессиональный допуск.
+- Услуга может участвовать в новых операциях бронирования при выполнении всех остальных условий.
+
+## 7.3. Неуспешная операция
+
+- Не возникает частично созданной или некорректно активированной услуги.
+- Существующие данные остаются согласованными.
+
+---
+
+# 8. Бизнес-правила
+
+## 8.1. Принадлежность
+
+Каждая ServiceOffering принадлежит конкретному Specialist.
+
+## 8.2. Создание до одобрения
+
+Создание и редактирование неактивных услуг разрешается до одобрения специалиста.
+
+## 8.3. Активация
+
+Для активации требуется:
+
+```text
+UserRole.SPECIALIST
+AND UserStatus.ACTIVE
+AND Specialist.approvalStatus = APPROVED
+```
+
+## 8.4. BookingAccess
+
+`SpecialistBookingAccess.bookingAllowed` не является самостоятельным условием создания неактивной услуги.
+
+Однако создание новой Reservation требует действующего эффективного допуска к бронированию.
+
+## 8.5. Длительность
+
+`durationMinutes > 0`
+
+Длительность не обязана быть кратной 15 минутам.
+
+## 8.6. Перерыв
+
+`breakDurationMinutes >= 0`
+
+## 8.7. Стоимость
+
+`price IS NOT NULL`
+
+`price >= 0`
+
+Нулевая цена разрешена.
+
+## 8.8. Валюта
+
+`currency IS NOT NULL`
+
+Валюта представляется трёхбуквенным кодом.
+
+## 8.9. Неактивная услуга
+
+Неактивная ServiceOffering не может использоваться для создания новой Reservation.
+
+## 8.10. Независимость расписания
+
+Создание и активация ServiceOffering не создают отдельные AvailabilitySlot.
+
+## 8.11. Исторические условия
+
+Изменение услуги не изменяет условия ранее созданных Reservation и Booking.
+
+---
+
+# 9. Связанные сценарии
+
+- `UC-002 Register Specialist`;
+- `UC-003 Review Specialist Application`;
+- `UC-006 Manage Availability (Slots)` — управление расписанием;
+- `UC-007 Book Appointment`.
+
+---
+
+# 10. Открытые вопросы
+
+Необходимо отдельно определить:
+
+- Можно ли активировать услугу, если административно запрещено принимать новые бронирования, или этот запрет должен действовать только на Reservation?
+- Что происходит с уже активными услугами после изменения статуса APPROVED на SUSPENDED?
+- Нужно ли автоматически деактивировать услуги при утрате профессионального допуска?
+
+До принятия отдельного решения нельзя считать автоматическую деактивацию утверждённым правилом.
+
+При этом новые Reservation должны блокироваться по актуальному эффективному допуску независимо от значения isActive.
+
+---
+
+# 11. Итог
+
+```text
+SPECIALIST / PENDING
+        ↓
+Create ServiceOffering
+        ↓
+isActive = false
+        ↓
+Specialist APPROVED
+        ↓
+Activate ServiceOffering
+        ↓
+isActive = true
+        ↓
+Booking Eligibility Check
+        ↓
+New Reservation
+```
+
+**Статус: DRAFT — сценарий согласован с решением о черновиках услуг и обязательной стоимости.**
