@@ -1,148 +1,328 @@
 
-**Status:** Draft
+# UC-008. Отмена консультации (Cancel Appointment)
 
-**Version:** 1.0
-
-**Primary Actor:** Client / Specialist
-
-**Supporting Actor:** System
-
-**Goal:**
-Allow a client or specialist to cancel an existing appointment while maintaining system consistency and respecting cancellation rules.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** CLIENT  
+**Дополнительные участники:** SPECIALIST, SYSTEM  
+**Цель:** Отменить подтверждённую консультацию с сохранением истории и освобождением занятого времени.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- User is authenticated.
-- User is either the client or the assigned specialist for the appointment.
-- Appointment exists.
-- Appointment status is **Booked** or **Confirmed**.
-- Appointment has not already started.
+Сценарий описывает отмену CONFIRMED Booking.
 
----
+В целевой модели PsyWeb отмена Booking не удаляет историческую запись о консультации.
 
-# Trigger
+При допустимой отмене:
 
-User selects an existing appointment and chooses **Cancel Appointment**.
+- Booking получает статус CANCELLED;
+- сохраняются метаданные отмены;
+- связанная ScheduleOccupancy освобождается;
+- участники могут получить предусмотренные уведомления.
 
----
+Основной полностью определённый сценарий MVP — отмена клиентом до начала консультации.
 
-# Main Success Scenario
+Отмена специалистом предусмотрена продуктовой моделью, но её точные правила требуют дополнительного согласования.
 
-1. User opens their appointment list.
-2. User selects an active appointment.
-3. User clicks **Cancel Appointment**.
-4. System checks cancellation permissions.
-5. System verifies cancellation rules (e.g. time constraints).
-6. System updates appointment status to **Cancelled**.
-7. System frees the associated availability slot.
-8. System notifies both client and specialist about cancellation.
-9. System confirms successful cancellation.
+Отмена ACTIVE Reservation является отдельной операцией и не заменяет отмену Booking.
 
 ---
 
-# Alternative Flows
+# 2. Предусловия
 
-## A1. Appointment already started
-
-At Step 5:
-
-1. System detects that appointment start time has passed or is imminent.
-2. Cancellation is rejected.
-3. System informs user that cancellation is not allowed.
-
----
-
-## A2. Unauthorized cancellation attempt
-
-At Step 4:
-
-1. System detects that user is neither client nor assigned specialist.
-2. Operation is rejected.
-3. System returns authorization error.
+- Пользователь аутентифицирован.
+- `UserStatus.ACTIVE`.
+- Booking существует.
+- Booking находится в состоянии CONFIRMED.
+- Пользователь имеет право инициировать соответствующую отмену.
+- Для обычной клиентской отмены текущее время меньше sessionStart.
 
 ---
 
-## A3. Cancellation too late (policy restriction)
+# 3. Инициирующее событие
 
-At Step 5:
-
-1. System checks cancellation policy (e.g. <24 hours before session).
-2. System detects violation.
-3. Cancellation is rejected or marked as requiring approval (future extension).
+Клиент открывает собственную подтверждённую консультацию и выбирает действие отмены.
 
 ---
 
-## A4. Appointment already cancelled
+# 4. Основной успешный сценарий: отмена клиентом
 
-At Step 4–5:
-
-1. System detects appointment status = Cancelled.
-2. Operation is ignored or rejected.
-3. System informs user.
-
----
-
-# Postconditions
-
-## Success
-
-- Appointment status is **Cancelled**.
-- Slot becomes available again (if applicable).
-- Notifications are sent.
-
-## Failure
-
-- No changes are applied.
-- System state remains consistent.
+1. Клиент открывает список собственных Booking.
+2. Выбирает подтверждённую консультацию.
+3. Запрашивает отмену.
+4. Система проверяет аутентификацию и полномочия.
+5. Система проверяет принадлежность Booking клиенту.
+6. Система проверяет, что Booking находится в состоянии CONFIRMED.
+7. Система проверяет, что консультация ещё не началась.
+8. Система определяет актуальное время отмены.
+9. Система использует сохранённый clientCancellationNotice для определения своевременности отмены.
+10. Система переводит Booking в CANCELLED.
+11. Система сохраняет:
+    - cancelledAt;
+    - cancellationInitiator = CLIENT.
+12. Система удаляет связанную ScheduleOccupancy.
+13. Изменения фиксируются атомарно.
+14. Клиент получает подтверждение отмены.
+15. Система инициирует предусмотренные уведомления участников.
 
 ---
 
-# Related Functional Requirements
+# 5. Альтернативные сценарии
 
-- FR-030
-- FR-031
-- FR-034
-- FR-046
+## 5.1. Поздняя отмена
+
+**Возникает на шаге 9.**
+
+1. Система определяет, что clientCancellationDeadline уже наступил.
+2. Проверяет, что sessionStart ещё не наступил.
+3. Отмена остаётся разрешённой.
+4. Booking переводится в CANCELLED.
+5. ScheduleOccupancy освобождается.
+6. Сохраняются метаданные отмены.
+
+Для MVP поздняя отмена не влечёт автоматических штрафов или денежных взысканий.
+
+## 5.2. Консультация уже началась
+
+**Возникает на шаге 7.**
+
+1. Система обнаруживает `now >= sessionStart`.
+2. Обычная клиентская отмена отклоняется.
+3. Booking не изменяется.
+4. Клиент получает сообщение о невозможности отмены.
+
+## 5.3. Booking уже отменена
+
+**Возникает на шаге 6.**
+
+1. Система обнаруживает статус CANCELLED.
+2. Повторная отмена не применяется.
+3. Система возвращает предусмотренный результат для уже отменённой Booking.
+
+## 5.4. Недостаточные полномочия
+
+**Возникает на шаге 4 или 5.**
+
+1. Пользователь не имеет права отменять выбранную Booking.
+2. Операция отклоняется.
+3. Данные Booking не изменяются.
+
+## 5.5. Конкурентное изменение Booking
+
+1. Во время обработки другая операция изменяет состояние Booking.
+2. Система согласует изменения через транзакционный механизм.
+3. Допустимый переход применяется не более одного раза.
+4. Противоречивое частичное состояние не сохраняется.
+
+## 5.6. Ошибка сохранения
+
+1. Система не может завершить согласованную отмену.
+2. Операция считается неуспешной.
+3. Booking и ScheduleOccupancy не должны оставаться в противоречивых состояниях.
+4. Клиент получает предусмотренное сообщение об ошибке.
+
+## 5.7. Ошибка уведомления
+
+1. Отмена успешно сохранена.
+2. Отправка уведомления завершается ошибкой.
+3. Статус Booking не откатывается.
+4. Ошибка обрабатывается согласно политике Notification.
 
 ---
 
-# Related User Stories
+# 6. Отмена специалистом
 
-- US-007
-- US-017
+## 6.1. Назначение
+
+Продуктовая модель предусматривает возможность отмены консультации со стороны специалиста.
+
+## 6.2. Предусловия
+
+Специалист должен иметь необходимые полномочия и быть участником соответствующей Booking.
+
+## 6.3. Общее требование
+
+При разрешённой отмене:
+
+- Booking переводится в CANCELLED;
+- сохраняется фактический инициатор;
+- освобождается ScheduleOccupancy;
+- сохраняется историческая запись;
+- формируются предусмотренные уведомления.
+
+## 6.4. Открытые вопросы
+
+Необходимо отдельно определить:
+
+- временные ограничения;
+- возможность отмены после начала;
+- последствия для специалиста;
+- необходимость указания причины;
+- действия при конфликтных ситуациях;
+- связь с SessionOutcome.
+
+До утверждения этих правил нельзя считать клиентскую политику отмены автоматически применимой к специалисту.
 
 ---
 
-# Related Product Backlog Items
+# 7. Отмена ACTIVE Reservation
 
-- PB-009 Appointment Management
+## 7.1. Разделение
+
+Отмена Reservation и отмена Booking являются разными операциями.
+
+## 7.2. Действующая Reservation
+
+ACTIVE Reservation может быть отменена предусмотренным участником или системным сценарием.
+
+## 7.3. Результат
+
+```text id="47ufxo"
+Reservation ACTIVE → CANCELLED
+    +
+DELETE ScheduleOccupancy
+```
+
+## 7.4. Истечение
+
+При истечении TTL применяется другой переход:
+
+```text id="2uboye"
+Reservation ACTIVE → EXPIRED
+    +
+DELETE ScheduleOccupancy
+```
+
+## 7.5. История
+
+Reservation сохраняется.
+
+## 7.6. Подтверждённая Reservation
+
+После перехода Reservation в CONFIRMED отмена консультации выполняется через соответствующую Booking.
 
 ---
 
-# Notes
+# 8. Постусловия
 
-### Cancellation Policy
+## 8.1. Успешная отмена Booking
 
-Cancellation rules (e.g. time limits like 24 hours) are handled as business rules and may vary per specialist.
+- Booking имеет статус CANCELLED.
+- Сохранены cancelledAt и cancellationInitiator.
+- Соответствующая ScheduleOccupancy освобождена.
+- История Booking сохранена.
+- Новое бронирование освобождённого времени возможно только по актуальным бизнес-правилам.
+- Предусмотренные уведомления инициированы.
+
+## 8.2. Неуспешная отмена
+
+- Booking не получает недопустимый переход.
+- ScheduleOccupancy не освобождается ошибочно.
+- Историческое состояние остаётся согласованным.
 
 ---
 
-### System Consistency Rule
+# 9. Бизнес-правила
 
-If an appointment is cancelled:
+## 9.1. Состояние
 
-- it must never remain in "active" state;
-- its slot must be restored if applicable;
-- both participants must be notified.
+Обычная отмена применяется к CONFIRMED Booking.
+
+## 9.2. Клиентская отмена
+
+Клиент может отменить собственную консультацию до её начала.
+
+## 9.3. Дедлайн
+
+```text id="2bcm3x"
+clientCancellationDeadline =
+    sessionStart - clientCancellationNotice
+```
+
+## 9.4. Своевременная отмена
+
+```text id="gslgai"
+cancelledAt < clientCancellationDeadline
+```
+
+## 9.5. Поздняя отмена
+
+```text id="kp4hgj"
+clientCancellationDeadline <= cancelledAt < sessionStart
+```
+
+## 9.6. Разрешение поздней отмены
+
+Поздняя отмена допустима до начала консультации.
+
+## 9.7. Статус
+
+Своевременная и поздняя отмена используют:
+
+`BookingStatus.CANCELLED`
+
+## 9.8. Историческая политика
+
+Для определения своевременности применяется clientCancellationNotice, сохранённый для соответствующей Reservation.
+
+## 9.9. Освобождение времени
+
+Допустимая отмена Booking освобождает соответствующую ScheduleOccupancy.
+
+## 9.10. История
+
+Booking не удаляется.
+
+## 9.11. Повторное бронирование
+
+Освобождённый интервал становится доступным только при выполнении текущего Schedule, minimumBookingNotice, bookingHorizonDays и других применимых правил.
+
+## 9.12. Независимость Notification
+
+Ошибка уведомления не должна отменять уже успешно завершённую транзакцию Booking.
 
 ---
 
-### Future Extension
+# 10. Связанные сценарии
 
-This Use Case may later support:
+- `UC-007 Book Appointment`;
+- `UC-006 Manage Availability (Slots)` — управление расписанием;
+- будущие административные и Outcome-сценарии.
 
-- cancellation fees (if payments are added)
-- rescheduling flow (UC-009 extension)
-- admin override cancellation
+---
+
+# 11. Примечания
+
+- Отмена Booking не равна определению факта проведения консультации.
+- После начала консультации обычная клиентская отмена не допускается.
+- Поздняя отмена не означает отдельный статус Booking.
+- Удаление Occupancy не означает удаление истории консультации.
+- Правила отмены специалистом требуют отдельного согласования.
+- Не предусмотрен отдельный сценарий переноса Booking для MVP.
+- Административная потеря допуска специалиста не отменяет автоматически CONFIRMED Booking.
+
+---
+
+# 12. Итог
+
+Успешная клиентская отмена:
+
+```text id="uijcud"
+CONFIRMED Booking
+    ↓
+Проверка прав и времени
+    ↓
+Booking CANCELLED
+    +
+Cancellation Metadata
+    +
+DELETE ScheduleOccupancy
+    ↓
+COMMIT
+    ↓
+Notification
+```
+
+**Статус: DRAFT — клиентская отмена согласована с Booking и ScheduleOccupancy; правила отмены специалистом требуют отдельного решения.**
