@@ -1,65 +1,82 @@
-**Status:** Draft
 
-**Version:** 2.0
+# UC-009. Оставление отзыва (Leave Review)
 
-**Primary Actor:** Client
-
-**Supporting Actor:** System
-
-**Goal:**
-
-Allow a Client to leave feedback for a Specialist after at least one consultation between them has been conclusively resolved as having occurred.
+**Проект:** PsyWeb  
+**Статус:** DRAFT  
+**Основной участник:** CLIENT  
+**Дополнительный участник:** SYSTEM  
+**Цель:** Позволить клиенту оставить отзыв о специалисте после консультации, факт проведения которой окончательно подтверждён.
 
 ---
 
-# Preconditions
+# 1. Описание
 
-- Client is authenticated.
-- Specialist exists.
-- At least one historical Booking exists between the Client and Specialist with a SessionOutcome satisfying:
+Сценарий описывает создание Review клиентом PsyWeb.
+
+Право оставить отзыв возникает после хотя бы одной консультации соответствующих клиента и специалиста с окончательным результатом:
 
 ```text
-resolutionStatus = RESOLVED
-finalOutcome = OCCURRED
+SessionOutcome.resolutionStatus = RESOLVED
+SessionOutcome.finalOutcome = OCCURRED
 ```
 
-- Review for this Client-Specialist pair does not already exist.
+Отзыв относится к взаимоотношению клиента и специалиста, а не к отдельной консультации.
+
+Один клиент может иметь не более одного Review одному специалисту.
+
+Повторные успешные консультации не дают права создавать дополнительные Review той же пары, но клиент может редактировать существующий отзыв.
 
 ---
 
-# Trigger
+# 2. Предусловия
 
-Client chooses to leave a Review for a Specialist.
-
----
-
-# Main Success Scenario
-
-1. Client opens the Specialist or Review interface.
-2. Client selects **Leave Review**.
-3. System identifies the authenticated Client and target Specialist.
-4. System checks whether a Review already exists for the Client-Specialist pair.
-5. System checks historical Booking and SessionOutcome data for the same Client and Specialist.
-6. System verifies that at least one SessionOutcome is `RESOLVED / OCCURRED`.
-7. Client enters a rating and optional comment.
-8. Client submits the Review.
-9. System validates the Review data.
-10. System stores one Review linked to the Client and Specialist.
-11. System confirms successful submission.
+- Клиент аутентифицирован.
+- `UserRole.CLIENT`.
+- `UserStatus.ACTIVE`.
+- Специалист существует.
+- Между клиентом и специалистом существует хотя бы одна историческая Booking с окончательно подтверждённым результатом OCCURRED.
+- Review для данной пары клиент–специалист ещё не существует.
 
 ---
 
-# Alternative Flows
+# 3. Инициирующее событие
 
-## A1. No Eligible SessionOutcome
+Клиент выбирает действие «Оставить отзыв» на странице специалиста или в предусмотренном разделе консультаций.
 
-At Step 6:
+---
 
-1. System finds no `RESOLVED / OCCURRED` SessionOutcome for the Client-Specialist pair.
-2. Review creation is rejected.
-3. System informs the Client that Review creation is not yet allowed.
+# 4. Основной успешный сценарий
 
-The following do not satisfy eligibility:
+1. Клиент открывает страницу специалиста.
+2. Выбирает действие создания отзыва.
+3. Система определяет идентичность аутентифицированного клиента.
+4. Система определяет специалиста, которому адресован отзыв.
+5. Система проверяет отсутствие Review для этой пары.
+6. Система проверяет историю Booking клиента у данного специалиста.
+7. Система находит хотя бы одну Booking с окончательным SessionOutcome `RESOLVED / OCCURRED`.
+8. Система устанавливает наличие права на создание Review.
+9. Клиент выбирает оценку от 1 до 5.
+10. Клиент при желании добавляет текстовый комментарий.
+11. Клиент отправляет отзыв.
+12. Система проверяет корректность данных и повторно контролирует необходимые ограничения создания.
+13. Система создаёт Review, связанный с клиентом и специалистом.
+14. Система сохраняет ссылку на подходящую Booking как первоначальное основание для Review.
+15. Система сохраняет Review.
+16. Клиент получает подтверждение успешного создания отзыва.
+
+---
+
+# 5. Альтернативные сценарии
+
+## 5.1. Нет подтверждённо успешной консультации
+
+**Возникает на шаге 7.**
+
+1. Система не обнаруживает подходящий SessionOutcome.
+2. Создание Review отклоняется.
+3. Клиент получает сообщение об отсутствии права на отзыв.
+
+Не дают такого права:
 
 ```text
 PENDING
@@ -68,115 +85,209 @@ UNVERIFIED
 RESOLVED / DID_NOT_OCCUR
 ```
 
----
+Одна только CONFIRMED Booking также не является достаточным основанием.
 
-## A2. Review Already Exists
+## 5.2. Review уже существует
 
-At Step 4:
+**Возникает на шаге 5.**
 
-1. System detects an existing Review for the same Client and Specialist.
-2. Creation of another Review is rejected.
-3. Client may edit the existing Review instead.
+1. Система обнаруживает ранее созданный Review для пары клиент–специалист.
+2. Создание второго отзыва запрещается.
+3. Клиент может перейти к редактированию существующего Review.
 
----
+## 5.3. Некорректная оценка
 
-## A3. Invalid Review Data
+**Возникает на шаге 12.**
 
-At Step 9:
+1. Оценка отсутствует либо выходит за пределы допустимого диапазона.
+2. Система отклоняет создание.
+3. Клиент получает сообщение об ошибке.
+4. Может исправить данные и повторить попытку.
 
-1. System detects invalid Review data.
-2. Review is not saved.
-3. System returns validation errors.
+## 5.4. Некорректный комментарий
 
----
+**Возникает на шаге 12.**
 
-# Postconditions
+1. Комментарий нарушает предусмотренные ограничения.
+2. Система отклоняет сохранение.
+3. Клиент получает сообщение об ошибке.
 
-## Success
+## 5.5. Конкурентное создание двух Review
 
-- Review is stored in the system.
-- Review is linked to the Client and Specialist.
-- No Booking identifier is stored as Review ownership.
-- Specialist rating queries can include the new Review.
+1. Несколько запросов пытаются создать Review одной пары клиент–специалист.
+2. Система обеспечивает уникальность.
+3. Не более одного нового Review успешно сохраняется.
+4. Остальные запросы завершаются предусмотренным конфликтом.
 
-## Failure
+## 5.6. Недостаточные полномочия
 
-- No new Review is created.
-- Existing system state remains unchanged.
+1. Пользователь не имеет права создавать Review от имени указанного клиента.
+2. Операция отклоняется.
+3. Review не создаётся.
 
----
+## 5.7. Ошибка сохранения
 
-# Related Functional Requirements
-
-- FR-047
-- FR-048
-- FR-049
-- FR-050
-
----
-
-# Related User Stories
-
-- US-009
+1. Система не может сохранить Review.
+2. Операция считается неуспешной.
+3. Частично сохранённый отзыв не остаётся в базе данных.
 
 ---
 
-# Related Product Backlog Items
+# 6. Редактирование существующего Review
 
-- PB-010 Reviews
+## 6.1. Назначение
+
+Клиент может изменить ранее созданный собственный Review.
+
+## 6.2. Сценарий
+
+1. Клиент открывает существующий отзыв.
+2. Система проверяет его принадлежность.
+3. Клиент изменяет оценку и/или комментарий.
+4. Система проверяет корректность новых данных.
+5. Система сохраняет изменения.
+6. Клиент получает подтверждение.
+
+## 6.3. Дополнительные консультации
+
+Новая подтверждённо успешная консультация не требуется для редактирования уже существующего Review.
+
+## 6.4. Уникальность
+
+Редактирование не создаёт новый Review.
+
+## 6.5. Историческое основание
+
+Связь с Booking, первоначально предоставившей право на отзыв, сохраняется.
 
 ---
 
-# Notes
+# 7. Постусловия
 
-## Critical Rule
+## 7.1. Успешное создание
 
-Review eligibility exists when at least one consultation for the same Client and Specialist has:
+- Создан один Review.
+- Review связан с CLIENT и SPECIALIST.
+- Сохранена допустимая оценка.
+- Сохранён комментарий, если он предоставлен.
+- Сохранено основание eligibility через соответствующую Booking.
+- Отзыв может учитываться при расчёте рейтинга специалиста.
+
+## 7.2. Успешное редактирование
+
+- Существующий Review обновлён.
+- Второй Review не создан.
+- Первоначальное основание eligibility сохранено.
+
+## 7.3. Неуспешная операция
+
+- Новый Review не создаётся либо существующий не изменяется.
+- Система сохраняет согласованное состояние.
+
+---
+
+# 8. Бизнес-правила
+
+## 8.1. Eligibility
+
+Создание Review разрешено при наличии хотя бы одной консультации соответствующей пары с:
 
 ```text
-SessionOutcome.resolutionStatus = RESOLVED
-SessionOutcome.finalOutcome = OCCURRED
+resolutionStatus = RESOLVED
+finalOutcome = OCCURRED
 ```
 
-The final OCCURRED outcome may result from:
+## 8.2. Способ разрешения Outcome
 
-- two compatible OCCURRED reports;
-- one OCCURRED report finalized after reporting timeout;
-- administrative resolution of a dispute to OCCURRED.
+Право на Review не зависит от способа, которым получен окончательный результат.
 
-Dual confirmation is not required as a separate Review condition.
+Допустимыми основаниями являются:
 
----
+- два совместимых OCCURRED;
+- один OCCURRED, окончательно принятый после завершения reporting window;
+- административное разрешение спора в пользу OCCURRED.
 
-## Relationship Rule
-
-The Review belongs to:
+## 8.3. Уникальность
 
 ```text
-Client + Specialist
+UNIQUE(client_id, specialist_id)
 ```
 
-not to an individual appointment.
+## 8.4. Владение
 
-At most one Review may exist for the same pair.
+Review принадлежит клиенту и специалисту как паре участников.
 
-The existing Review may be edited later.
+Он не принадлежит отдельной Booking.
+
+## 8.5. EligibilityBooking
+
+Review хранит ссылку на Booking, подтверждающую первоначальное право его создания.
+
+Связанная Booking должна принадлежать тем же клиенту и специалисту.
+
+## 8.6. Rating
+
+Оценка должна находиться в диапазоне:
+
+```text
+1..5
+```
+
+## 8.7. Комментарий
+
+Комментарий может быть необязательным.
+
+Допустимые ограничения длины и содержания определяются моделью Review.
+
+## 8.8. Редактирование
+
+Клиент может редактировать только собственный Review.
+
+## 8.9. Повторные консультации
+
+Количество успешных консультаций не увеличивает количество разрешённых Review.
+
+## 8.10. Рейтинг специалиста
+
+Рейтинг специалиста рассчитывается на основании актуальных Review.
+
+Для MVP не требуется обязательное хранение отдельного поля `rating_avg`.
 
 ---
 
-## Rating
+# 9. Связанные сценарии
 
-For the MVP, Specialist rating is calculated from Review data when queried.
+- `UC-007 Book Appointment` — запись на консультацию;
+- `UC-008 Cancel Appointment` — отмена консультации.
 
-A persisted `rating_avg` field is not required.
+Определение SessionOutcome является самостоятельным бизнес-процессом и требует отдельного Use Case при расширении набора сценариев.
 
 ---
 
-## Future Extension
+# 10. Примечания
 
-This Use Case may later include:
+- Review не создаётся только на основании окончания времени Booking.
+- CONFIRMED Booking не доказывает факт проведения консультации.
+- Исторический SessionOutcome остаётся основанием eligibility.
+- Одна пара клиент–специалист может иметь только один Review.
+- Удаление и административная модерация отзывов требуют отдельных правил.
+- Точный REST endpoint определяется API-документацией.
+- Техническая реализация уникальности и ссылочной целостности определяется Database и Review Domain.
 
-- additional moderation workflows;
-- fraud-prevention mechanisms;
-- rating caching or projection for performance;
-- more advanced reputation models.
+---
+
+# 11. Итог
+
+```text
+Booking
+    ↓
+SessionOutcome
+    ↓
+RESOLVED / OCCURRED
+    ↓
+Review Eligibility
+    ↓
+Review(Client, Specialist)
+```
+
+**Статус: DRAFT — сценарий согласован с SessionOutcome и Review Domain.**
